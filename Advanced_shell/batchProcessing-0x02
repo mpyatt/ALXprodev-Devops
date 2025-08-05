@@ -1,0 +1,27 @@
+#!/bin/bash
+
+POKEMON_LIST=(bulbasaur ivysaur venusaur charmander charmeleon)
+API_ROOT="https://pokeapi.co/api/v2/pokemon"
+DATA_DIR="pokemon_data"
+ERR_FILE="errors.txt"
+DELAY=1
+
+mkdir -p "$DATA_DIR"
+
+for POKE in "${POKEMON_LIST[@]}"; do
+  FILE="$DATA_DIR/${POKE}.json"
+  echo "Fetching data for $POKE..."
+
+  # Use silent mode but keep error output; capture status code.
+  status=$(curl -sS -w "%{http_code}" -o "$FILE" "$API_ROOT/$POKE")
+
+  if [ "$status" -eq 200 ]; then
+    echo "Saved data to $FILE ✅"
+  else
+    rm -f "$FILE"  # remove any partial download
+    printf '%s - Failed to fetch %s (HTTP %s)\n' "$(date '+%F %T')" "$POKE" "$status" >> "$ERR_FILE"
+    echo "Error: see $ERR_FILE ❌"
+  fi
+
+  sleep "$DELAY"
+done
