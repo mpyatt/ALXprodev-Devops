@@ -5,21 +5,27 @@ API_ROOT="https://pokeapi.co/api/v2/pokemon"
 DATA_DIR="pokemon_data"
 ERR_FILE="errors.txt"
 
-RETRIES=3
-DELAY=1
+RETRIES=3    # attempts per Pokémon
+DELAY=1      # base back-off (seconds)
 
 mkdir -p "$DATA_DIR"
+> "$ERR_FILE"  # start fresh
 
-# Empty previous error log (optional – comment out if you prefer append-only)
-> "$ERR_FILE"
+# ---- Clean-up on interrupt or unexpected exit -----------------------------
+cleanup() {
+  echo -e "\nInterrupted – terminating background jobs..." >&2
+  # Kill **every** job in this process group (including subshells)
+  kill 0
+}
+trap cleanup INT TERM
 
+# ---- Function to fetch & retry a single Pokémon ---------------------------
 fetch_pokemon() {
   local name=$1
   local file="$DATA_DIR/$name.json"
-  local attempt=1
-  local status
+  local attempt=1 status
 
-  while [ $attempt -le $RETRIES ]; do
+  while [ "$attempt" -le "$RETRIES" ]; do
     status=$(curl -sS -w "%{http_code}" -o "$file" "$API_ROOT/$name")
     if [ "$status" -eq 200 ]; then
       echo "Saved data to $file ✅"
@@ -30,23 +36,23 @@ fetch_pokemon() {
     attempt=$((attempt+1))
   done
 
-  # If we reach here all retries failed
   rm -f "$file"
   printf '%s - Failed to fetch %s after %d attempts (last HTTP %s)\n' \
          "$(date '+%F %T')" "$name" "$RETRIES" "$status" >> "$ERR_FILE"
   return 1
 }
 
+# ---- Launch background jobs ----------------------------------------------
 echo "Starting parallel fetch for: ${POKEMON_LIST[*]}"
 pids=()
 
 for poke in "${POKEMON_LIST[@]}"; do
   echo "Fetching data for $poke..."
-  fetch_pokemon "$poke" &         # launch in background
-  pids+=($!)                      # remember PID
+  fetch_pokemon "$poke" &      # run in background
+  pids+=($!)                   # record PID
 done
 
-# Wait for all background jobs and track overall success
+# ---- Wait for all jobs ----------------------------------------------------
 overall_rc=0
 for pid in "${pids[@]}"; do
   if ! wait "$pid"; then
@@ -54,11 +60,14 @@ for pid in "${pids[@]}"; do
   fi
 done
 
+# Disable trap once all children done
+trap - INT TERM
+
 echo
-if [ $overall_rc -eq 0 ]; then
+if [ "$overall_rc" -eq 0 ]; then
   echo "All Pokémon fetched successfully 🎉"
 else
   echo "Some fetches failed – see $ERR_FILE"
 fi
 
-exit $overall_rc
+exit "$overall_rc"

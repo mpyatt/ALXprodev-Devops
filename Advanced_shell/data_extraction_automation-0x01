@@ -1,7 +1,4 @@
 #!/bin/bash
-# data_extraction_automation-0x01
-# Extract Pikachu details from data.json and print a friendly sentence.
-# Tools used: jq, awk, sed
 
 DATA_FILE="data.json"
 
