@@ -1,7 +1,4 @@
 #!/bin/bash
-# Fetch data for Pikachu from the PokéAPI.
-# On success, save the JSON in data.json.
-# On failure, append an entry to errors.txt and exit non-zero.
 
 API_URL="https://pokeapi.co/api/v2/pokemon/pikachu"
 OUT_FILE="data.json"
