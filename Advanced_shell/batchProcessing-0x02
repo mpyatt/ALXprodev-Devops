@@ -4,24 +4,37 @@ POKEMON_LIST=(bulbasaur ivysaur venusaur charmander charmeleon)
 API_ROOT="https://pokeapi.co/api/v2/pokemon"
 DATA_DIR="pokemon_data"
 ERR_FILE="errors.txt"
+
+RETRIES=3
 DELAY=1
 
 mkdir -p "$DATA_DIR"
 
 for POKE in "${POKEMON_LIST[@]}"; do
-  FILE="$DATA_DIR/${POKE}.json"
+  FILE="$DATA_DIR/$POKE.json"
   echo "Fetching data for $POKE..."
 
-  # Use silent mode but keep error output; capture status code.
-  status=$(curl -sS -w "%{http_code}" -o "$FILE" "$API_ROOT/$POKE")
+  attempt=1
+  success=false
+  while [ $attempt -le $RETRIES ]; do
+    # silent body (-s) but show connection errors (-S); capture HTTP status
+    status=$(curl -sS -w "%{http_code}" -o "$FILE" "$API_ROOT/$POKE")
 
-  if [ "$status" -eq 200 ]; then
-    echo "Saved data to $FILE ✅"
-  else
-    rm -f "$FILE"  # remove any partial download
-    printf '%s - Failed to fetch %s (HTTP %s)\n' "$(date '+%F %T')" "$POKE" "$status" >> "$ERR_FILE"
-    echo "Error: see $ERR_FILE ❌"
+    if [ "$status" -eq 200 ]; then
+      echo "Saved data to $FILE ✅"
+      success=true
+      break
+    fi
+
+    echo "  Attempt $attempt failed (HTTP $status). Retrying in $((attempt*DELAY))s..."
+    sleep $((attempt*DELAY))
+    ((attempt++))
+  done
+
+  if ! $success; then
+    rm -f "$FILE"  # remove any partial or corrupt download
+    printf '%s - Failed to fetch %s after %d attempts (last HTTP %s)\n' \
+      "$(date '+%F %T')" "$POKE" "$RETRIES" "$status" >> "$ERR_FILE"
+    echo "Error logged to $ERR_FILE ❌"
   fi
-
-  sleep "$DELAY"
 done
